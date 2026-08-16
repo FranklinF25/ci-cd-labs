@@ -35,6 +35,3 @@ jobs:
 
       - name: Finalizar pipeline
         run: echo "Pipeline ejecutado correctamente."
-
-      - name: Paso que falla deliberadamente
-        run: exit 1
