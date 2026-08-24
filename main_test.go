@@ -1,16 +1,21 @@
 package main
 
 import (
-	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
-// TestRutas cubre el comportamiento observable del servidor: status
-// codes y payloads de cada ruta, incluyendo method no permitido y 404.
+// fechaFija elimina el no-determinismo de /date para poder assertear
+// el payload exacto, igual que hace el test original de Spring.
+var fechaFija = time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+
+// TestRutas cubre el comportamiento observable del servidor: status,
+// content-type y body de cada ruta, en paridad con WebapiApplicationTests.
 func TestRutas(t *testing.T) {
-	ts := httptest.NewServer(newMux())
+	ts := httptest.NewServer(newMux(func() time.Time { return fechaFija }))
 	t.Cleanup(ts.Close)
 
 	tests := []struct {
@@ -18,33 +23,47 @@ func TestRutas(t *testing.T) {
 		method     string
 		path       string
 		wantStatus int
-		wantBody   map[string]string
+		wantType   string
+		wantBody   string
 	}{
 		{
-			name:       "hello devuelve mensaje",
+			name:       "raíz devuelve hello",
 			method:     http.MethodGet,
-			path:       "/hello",
+			path:       "/",
 			wantStatus: http.StatusOK,
-			wantBody:   map[string]string{"message": "Hola desde la webapi en Go"},
+			wantType:   "text/plain; charset=utf-8",
+			wantBody:   "Hello CI/CD World!",
 		},
 		{
-			name:       "health reporta ok",
+			name:       "health reporta healthy",
 			method:     http.MethodGet,
 			path:       "/health",
 			wantStatus: http.StatusOK,
-			wantBody:   map[string]string{"status": "ok"},
+			wantType:   "text/plain; charset=utf-8",
+			wantBody:   "Server Healthy!",
 		},
 		{
-			name:       "método no permitido en hello",
+			name:       "date devuelve fecha del servidor",
+			method:     http.MethodGet,
+			path:       "/date",
+			wantStatus: http.StatusOK,
+			wantType:   "text/plain; charset=utf-8",
+			wantBody:   "Current Server Date: 2026-08-23",
+		},
+		{
+			name:       "método no permitido en health",
 			method:     http.MethodPost,
-			path:       "/hello",
+			path:       "/health",
 			wantStatus: http.StatusMethodNotAllowed,
+			wantType:   "text/plain; charset=utf-8",
+			wantBody:   "Method Not Allowed\n",
 		},
 		{
 			name:       "ruta inexistente",
 			method:     http.MethodGet,
 			path:       "/noexiste",
 			wantStatus: http.StatusNotFound,
+			wantBody:   "404 page not found\n",
 		},
 	}
 
@@ -65,18 +84,18 @@ func TestRutas(t *testing.T) {
 				t.Errorf("status = %d, quería %d", res.StatusCode, tt.wantStatus)
 			}
 
-			if tt.wantBody == nil {
-				return
+			if tt.wantType != "" {
+				if got := res.Header.Get("Content-Type"); got != tt.wantType {
+					t.Errorf("content-type = %q, quería %q", got, tt.wantType)
+				}
 			}
 
-			var got map[string]string
-			if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
-				t.Fatalf("decodificando respuesta: %v", err)
+			body, err := io.ReadAll(res.Body)
+			if err != nil {
+				t.Fatalf("leyendo body: %v", err)
 			}
-			for k, want := range tt.wantBody {
-				if got[k] != want {
-					t.Errorf("%s = %q, quería %q", k, got[k], want)
-				}
+			if string(body) != tt.wantBody {
+				t.Errorf("body = %q, quería %q", string(body), tt.wantBody)
 			}
 		})
 	}
