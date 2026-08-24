@@ -1,5 +1,10 @@
 # Binario compilado localmente
 /ci-cd-labs
+webapi
+
+# Reportes de cobertura generados
+coverage.out
+coverage.html
 
 # Tooling local
 *.atl/
