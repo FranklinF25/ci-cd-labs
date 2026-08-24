@@ -1,44 +1,42 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
-
-// helloResponse es el payload que sirve GET /hello.
-type helloResponse struct {
-	Message string `json:"message"`
-}
-
-// healthResponse es el payload que sirve GET /health.
-type healthResponse struct {
-	Status string `json:"status"`
-}
 
 // newMux arma las rutas de la aplicación. Mantener el routing separado
 // del ListenAndServe permite testear todo el servidor con httptest.
-func newMux() *http.ServeMux {
+// Paridad exacta con el WebapiApplication.java original: texto plano.
+func newMux(now func() time.Time) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /hello", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, helloResponse{Message: "Hola desde la webapi en Go"})
+	// {$} coincide SOLO con el final de la URL: "GET /{$}" es el
+	// exact-match de la raíz (como el @GetMapping("/") de Spring).
+	// Sin esto, "GET /" sería prefix-match y "/noexiste" devolvería 200.
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		writeText(w, http.StatusOK, "Hello CI/CD World!")
 	})
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, healthResponse{Status: "ok"})
+		writeText(w, http.StatusOK, "Server Healthy!")
+	})
+
+	mux.HandleFunc("GET /date", func(w http.ResponseWriter, r *http.Request) {
+		writeText(w, http.StatusOK, "Current Server Date: "+now().Format("2006-01-02"))
 	})
 
 	return mux
 }
 
-// writeJSON serializa payload como respuesta JSON con el status dado.
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
+// writeText escribe una respuesta de texto plano con el status dado.
+func writeText(w http.ResponseWriter, status int, body string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("encoding respuesta: %v", err)
+	if _, err := w.Write([]byte(body)); err != nil {
+		log.Printf("escribiendo respuesta: %v", err)
 	}
 }
 
@@ -49,7 +47,7 @@ func main() {
 	}
 
 	log.Printf("webapi escuchando en %s", addr)
-	if err := http.ListenAndServe(addr, newMux()); err != nil {
+	if err := http.ListenAndServe(addr, newMux(time.Now)); err != nil {
 		log.Fatalf("el servidor terminó: %v", err)
 	}
 }
