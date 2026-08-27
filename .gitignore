@@ -9,3 +9,6 @@ coverage.html
 # Tooling local
 *.atl/
 .vscode/
+
+# Material del curso / contexto local
+Context/
