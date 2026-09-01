@@ -59,11 +59,14 @@ scripts/traffic-test.sh
                               ▼
                   scripts/deploy.sh (SSH)
                               │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-   server41 · Nginx :80             server45 · la app
-   switch de tráfico                BLUE  :8080 (instancia inactiva)
-   (upstream configurable)          GREEN :8081 (instancia activa)
+                              ▼
+                    AWS EC2 (t3.micro, Ubuntu)
+              ┌────────────────────────────────┐
+              │  Nginx :80 (switch de tráfico) │
+              │   upstream configurable        │
+              │  BLUE  :8080 (inactiva)        │
+              │  GREEN :8081 (activa)          │
+              └────────────────────────────────┘
               │
               ▼
         Health Check + validación de versión
@@ -132,16 +135,42 @@ versions:set (versión del tag) → clean verify (tests + JaCoCo) → gh release
 
 Resultado: Release `v1.1.0` → asset `webapi-1.1.0.jar`, publicada por `github-actions[bot]` (nunca a mano).
 
-## Infraestructura local
+## Infraestructura (AWS — una EC2)
 
-| Máquina | IP | Rol |
-|---|---|---|
-| server41 | 192.168.100.41 | Nginx `:80` — switch de tráfico Blue-Green |
-| server45 | 192.168.100.45 | Aplicación: BLUE `:8080` / GREEN `:8081` (Java 21) |
+| Recurso | Detalle |
+|---|---|
+| Instancia | EC2 `t3.micro`, Ubuntu 24.04, `us-east-1` (nombre: `ci-cd-lab`) |
+| Roles en la misma máquina | Nginx `:80` (switch Blue-Green) + BLUE `:8080` + GREEN `:8081` (Java 21) |
+| Security group `ci-cd-lab-sg` | `22` y `8080`/`8081` solo desde la IP del operador; `80` público |
+| Acceso | SSH por llave importada (`ci-cd-labs` → `id_ed25519_servers`): `ssh aws-lab` (usuario `ubuntu`) |
+| Provisioning | User-data al boot (Java 21 + Nginx) + `switch-backend.sh` + sudoers |
+| Costo | Dentro del free tier (750h/mes ≈ una instancia 24/7); `aws ec2 stop-instances` cuando no se usa |
 
-- Acceso SSH por llave (sin contraseñas) desde la máquina de desarrollo: `ssh server41` / `ssh server45`.
-- El switch de backend es `/usr/local/bin/switch-backend.sh` (en server41): edita el `upstream` del conf de Nginx, valida con `nginx -t`, recarga y actualiza el marcador `~/ACTIVE`. Está autorizado vía sudoers restringido (`NOPASSWD` solo para ese script), lo que permite automatizarlo por SSH.
+- El switch de backend es `/usr/local/bin/switch-backend.sh` (en la EC2): edita el `upstream` (`127.0.0.1`), valida con `nginx -t`, recarga y actualiza `~/ACTIVE`. Autorizado vía sudoers restringido (`NOPASSWD` solo para ese script).
 - La app corre como `INSTANCE_NAME=<COLOR> java -jar ~/releases/webapi-<version>.jar --server.port=<puerto>`.
+
+### Creación de la infra (reproducible)
+
+```bash
+# Key pair desde la llave pública existente
+aws ec2 import-key-pair --key-name ci-cd-labs \
+  --public-key-material fileb://~/.ssh/id_ed25519_servers.pub
+
+# Security group: 22/8080/8081 desde tu IP + 80 público
+aws ec2 create-security-group --group-name ci-cd-lab-sg --description "Proyecto final CI/CD"
+aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 80 --cidr 0.0.0.0/0
+aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 22 --cidr <tu-ip>/32
+aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 8080 --cidr <tu-ip>/32
+aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 8081 --cidr <tu-ip>/32
+
+# Instancia con auto-provisioning (user-data instala Java 21 + Nginx)
+aws ec2 run-instances --image-id <ami-ubuntu-24.04> --instance-type t3.micro \
+  --key-name ci-cd-labs --security-group-ids <sg-id> \
+  --user-data file://user-data.sh \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=ci-cd-lab}]'
+```
+
+> Historial: el proyecto se desarrolló y demostró primero sobre infra local (dos Ubuntu en LAN — server41/server45) y luego se migró a AWS conservando scripts y estrategia intactos; solo cambió `scripts/config.sh`.
 
 ## Estrategia de deployment: Blue-Green
 
@@ -198,11 +227,11 @@ scripts/deploy.sh 1.0.0 && scripts/traffic-test.sh     # BLUE v1.0.0
 
 # Nueva versión (activo BLUE -> deploy en GREEN + switch)
 scripts/deploy.sh 1.1.0 && scripts/traffic-test.sh     # GREEN v1.1.0
-curl http://192.168.100.41/goodbye                     # "Goodbye CI/CD World!" (feature nuevo)
+curl http://$(grep -oP 'LB_HOST="\K[^"]+' scripts/config.sh)/goodbye   # "Goodbye CI/CD World!"
 
 # Rollback (volver a BLUE v1.0.0, aún corriendo)
 scripts/switch-traffic.sh BLUE
-curl -i http://192.168.100.41/goodbye                  # 404: el feature no existe en v1.0.0
+curl -i http://$(grep -oP 'LB_HOST="\K[^"]+' scripts/config.sh)/goodbye   # 404: no existe en v1.0.0
 scripts/traffic-test.sh                                # BLUE v1.0.0
 
 # Volver al estado final (v1.1.0 activa)

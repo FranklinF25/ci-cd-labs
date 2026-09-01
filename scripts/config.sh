@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Configuración compartida de los scripts de deployment.
-# Infra: Nginx (LB/switch) en server41, aplicación Blue-Green en server45.
+# Infra cloud (AWS): una EC2 con Nginx + instancias Blue-Green juntas.
 
 # Hosts (aliases de ~/.ssh/config)
-LB_HOST_ALIAS="server41"
-APP_HOST_ALIAS="server45"
+LB_HOST_ALIAS="aws-lab"
+APP_HOST_ALIAS="aws-lab"   # misma EC2: nginx y la app conviven
 
-# IPs directas (para health checks y curls)
-LB_HOST="192.168.100.41"
-APP_HOST="192.168.100.45"
+# IPs públicas (para health checks, traffic-test y curl)
+LB_HOST="54.196.223.67"
+APP_HOST="54.196.223.67"
 
 # Puertos de las instancias Blue-Green (sección 16 del enunciado)
 BLUE_PORT=8080
@@ -19,5 +19,9 @@ GITHUB_REPO="FranklinF25/ci-cd-labs"
 ARTIFACT_PREFIX="webapi"
 
 # Comando remoto para cambiar el backend activo en Nginx
-# (script root instalado en server41, ejecutable sin password vía sudoers)
+# (script root instalado en la EC2, ejecutable sin password vía sudoers)
 SWITCH_CMD="sudo /usr/local/bin/switch-backend.sh"
+
+# --- Infra local alternativa (lab LAN, referencia histórica) ---
+# LB_HOST_ALIAS="server41"; APP_HOST_ALIAS="server45"
+# LB_HOST="192.168.100.41";  APP_HOST="192.168.100.45"
