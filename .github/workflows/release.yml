@@ -1,0 +1,46 @@
+name: Release
+
+# Sección 12 del proyecto final: tag v* -> Build -> Test -> Coverage
+# -> Package -> GitHub Release con el JAR de esa versión exacta.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "Version del release: $VERSION"
+          mvn -B versions:set -DnewVersion="$VERSION" versions:commit --file pom.xml
+
+      - name: Build, Test and Package (con JaCoCo)
+        run: mvn -B clean verify --file pom.xml
+
+      - name: Create GitHub Release with artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes "Release $GITHUB_REF_NAME de la webapi. Artifact: webapi-${VERSION}.jar" \
+            "target/webapi-${VERSION}.jar"
