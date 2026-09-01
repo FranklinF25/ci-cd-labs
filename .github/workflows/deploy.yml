@@ -1,0 +1,61 @@
+name: Deploy
+
+# CD completo: al publicarse una Release, se despliega automáticamente
+# a la infraestructura (EC2 con Nginx + Blue-Green) usando los mismos
+# scripts/ que se ejecutan localmente. También puede dispararse a mano.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a desplegar (ej: 1.1.0)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Blue-Green Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH access to the EC2
+        env:
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_ec2
+          chmod 600 ~/.ssh/id_ec2
+          cat > ~/.ssh/config << EOF
+          Host aws-lab
+            HostName ${EC2_HOST}
+            User ubuntu
+            IdentityFile ~/.ssh/id_ec2
+            StrictHostKeyChecking accept-new
+          EOF
+
+      - name: Determine version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            VERSION="${RELEASE_TAG#v}"
+          else
+            VERSION="${INPUT_VERSION#v}"
+          fi
+          echo "Deploying version: ${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Run Blue-Green deploy (scripts/deploy.sh)
+        run: scripts/deploy.sh "${{ steps.version.outputs.version }}"
+
+      - name: Verify traffic through the load balancer
+        run: scripts/traffic-test.sh 5

@@ -2,13 +2,14 @@
 # Configuración compartida de los scripts de deployment.
 # Infra cloud (AWS): una EC2 con Nginx + instancias Blue-Green juntas.
 
-# Hosts (aliases de ~/.ssh/config)
-LB_HOST_ALIAS="aws-lab"
-APP_HOST_ALIAS="aws-lab"   # misma EC2: nginx y la app conviven
+# Hosts (aliases de ~/.ssh/config). Sobreescribibles por variables de
+# entorno — así el workflow de GitHub Actions reutiliza estos scripts.
+LB_HOST_ALIAS="${LB_HOST_ALIAS:-aws-lab}"
+APP_HOST_ALIAS="${APP_HOST_ALIAS:-aws-lab}"   # misma EC2: nginx y la app conviven
 
-# IPs públicas (para health checks, traffic-test y curl)
-LB_HOST="54.196.223.67"
-APP_HOST="54.196.223.67"
+# IPs públicas (para traffic-test y curl al balanceador)
+LB_HOST="${LB_HOST:-54.196.223.67}"
+APP_HOST="${APP_HOST:-54.196.223.67}"
 
 # Puertos de las instancias Blue-Green (sección 16 del enunciado)
 BLUE_PORT=8080
