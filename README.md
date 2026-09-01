@@ -125,7 +125,7 @@ scripts/traffic-test.sh
 | Checkout + JDK 21 (Temurin, cache Maven) | `setup-java@v4` | Entorno reproducible |
 | Build | `mvn -B compile --file pom.xml` | Compila |
 | Unit Tests | `mvn -B test --file pom.xml` | 7 tests JUnit |
-| Package + Coverage | `mvn -B clean verify --file pom.xml` | JAR final + reporte JaCoCo (`target/site/jacoco/`) |
+| Package + Coverage | `mvn -B clean verify --file pom.xml` | JAR final + reporte JaCoCo, publicado como **artifact descargable** del run (`jacoco-report`) |
 
 Dispara en: push a `main` y PRs hacia `main`. Si un test falla, el check de la PR queda en rojo y el merge está bloqueado — ese comportamiento se demostró durante el desarrollo.
 
