@@ -54,14 +54,17 @@ scripts/traffic-test.sh
                               ▼
                     webapi-${VERSION}.jar
                               │
-                              ▼  (tag v* → release.yml)
-                       GitHub Release
-                              │
-                              ▼
-                  scripts/deploy.sh (SSH)
-                              │
-                              ▼
-                    AWS EC2 (t3.micro, Ubuntu)
+                               ▼  (tag v* → release.yml)
+                        GitHub Release
+                               │
+                               ▼  (evento: release published → deploy.yml)
+                GitHub Actions — CD (deploy.yml)
+                               │  ejecuta los MISMOS scripts/ por SSH
+                               ▼
+                   scripts/deploy.sh (Blue-Green)
+                               │
+                               ▼
+                     AWS EC2 (t3.micro, Ubuntu)
               ┌────────────────────────────────┐
               │  Nginx :80 (switch de tráfico) │
               │   upstream configurable        │
@@ -95,7 +98,7 @@ scripts/traffic-test.sh
 | Bash + SSH | Automatización del deployment |
 | Nginx | Switch de tráfico Blue-Green |
 | Docker | Toolchain de build local (sin instalar Java/Maven en la máquina) |
-| Ubuntu (2 VMs) | Infraestructura local de despliegue |
+| AWS EC2 (t3.micro, Ubuntu 24.04) | Infraestructura cloud: Nginx + instancias Blue-Green en una instancia |
 
 ## Estrategia de branching
 
@@ -148,7 +151,7 @@ git push origin v1.2.0
 
 | Secreto de repositorio | Contenido |
 |---|---|
-| `EC2_SSH_KEY` | Llave privada EDICADA de deploy (`id_ed25519_gh_deploy`) — no la llave principal |
+| `EC2_SSH_KEY` | Llave privada DEDICADA de deploy (`id_ed25519_gh_deploy`) — no la llave principal |
 | `EC2_HOST` | IP pública de la EC2 |
 
 La llave de deploy vive solo en los secrets y en la EC2 (`authorized_keys`); el security group solo expone `22` (autenticación exclusivamente por llave) y `80` — los puertos de las instancias (`8080`/`8081`) están cerrados al exterior porque los health checks viajan por SSH.
@@ -159,7 +162,7 @@ La llave de deploy vive solo en los secrets y en la EC2 (`authorized_keys`); el 
 |---|---|
 | Instancia | EC2 `t3.micro`, Ubuntu 24.04, `us-east-1` (nombre: `ci-cd-lab`) |
 | Roles en la misma máquina | Nginx `:80` (switch Blue-Green) + BLUE `:8080` + GREEN `:8081` (Java 21) |
-| Security group `ci-cd-lab-sg` | `22` y `8080`/`8081` solo desde la IP del operador; `80` público |
+| Security group `ci-cd-lab-sg` | `22` abierto (autenticación exclusivamente por llave) y `80` público; `8080`/`8081` **cerrados** (los health checks viajan por SSH) |
 | Acceso | SSH por llave importada (`ci-cd-labs` → `id_ed25519_servers`): `ssh aws-lab` (usuario `ubuntu`) |
 | Provisioning | User-data al boot (Java 21 + Nginx) + `switch-backend.sh` + sudoers |
 | Costo | Dentro del free tier (750h/mes ≈ una instancia 24/7); `aws ec2 stop-instances` cuando no se usa |
@@ -174,12 +177,10 @@ La llave de deploy vive solo en los secrets y en la EC2 (`authorized_keys`); el 
 aws ec2 import-key-pair --key-name ci-cd-labs \
   --public-key-material fileb://~/.ssh/id_ed25519_servers.pub
 
-# Security group: 22/8080/8081 desde tu IP + 80 público
+# Security group: 22 (mundo, solo llave) + 80 (mundo). 8080/8081 permanecen cerrados.
 aws ec2 create-security-group --group-name ci-cd-lab-sg --description "Proyecto final CI/CD"
 aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 80 --cidr 0.0.0.0/0
-aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 22 --cidr <tu-ip>/32
-aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 8080 --cidr <tu-ip>/32
-aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 8081 --cidr <tu-ip>/32
+aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 22 --cidr 0.0.0.0/0
 
 # Instancia con auto-provisioning (user-data instala Java 21 + Nginx)
 aws ec2 run-instances --image-id <ami-ubuntu-24.04> --instance-type t3.micro \
@@ -218,7 +219,7 @@ Pasos de `deploy.sh`: verificar Release → elegir instancia inactiva → descar
 
 ## Health checks y pruebas E2E
 
-- **Health check** (`health-check.sh`): se ejecuta contra la instancia nueva **directa** (sin pasar por el LB) antes de conmutar el tráfico. Solo una instancia sana puede recibir tráfico.
+- **Health check** (`health-check.sh`): consulta `/health` en la instancia nueva **por SSH** (localhost en la EC2, sin exponer puertos ni pasar por el LB) antes de conmutar el tráfico. Solo una instancia sana puede recibir tráfico.
 - **E2E** (dentro de `deploy.sh`, paso 7): la instancia nueva debe reportar exactamente `{instance: <color esperado>, version: <versión desplegada>}` en `/api/instance`. Esta condición decide si el deploy continúa hacia el switch.
 - **Verificación de tráfico** (`traffic-test.sh`): tras el switch, todas las solicitudes al LB deben ser atendidas por la instancia nueva con la versión nueva.
 
