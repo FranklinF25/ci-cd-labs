@@ -18,6 +18,7 @@ git push -u origin feature/mi-cambio
 gh pr create --fill && gh pr merge --merge --delete-branch
 
 # 3. Release: tag SemVer -> el workflow publica la Release con el JAR
+#    -> y deploy.yml despliega SOLO a la infra, sin intervención humana
 git checkout main && git pull
 git tag -a v1.2.0 -m "Release v1.2.0"
 git push origin v1.2.0
@@ -134,6 +135,23 @@ versions:set (versión del tag) → clean verify (tests + JaCoCo) → gh release
 ```
 
 Resultado: Release `v1.1.0` → asset `webapi-1.1.0.jar`, publicada por `github-actions[bot]` (nunca a mano).
+
+## Deploy continuo (`deploy.yml`)
+
+**La cadena completa es automática**: al publicarse una Release (o manualmente vía `workflow_dispatch`), el workflow se conecta por SSH a la EC2 y ejecuta **los mismos `scripts/` que se usan localmente** — no hay lógica duplicada:
+
+```
+git push origin v1.2.0
+   → release.yml publica la Release
+   → deploy.yml: scripts/deploy.sh 1.2.0 → Blue-Green + switch + verificación
+```
+
+| Secreto de repositorio | Contenido |
+|---|---|
+| `EC2_SSH_KEY` | Llave privada EDICADA de deploy (`id_ed25519_gh_deploy`) — no la llave principal |
+| `EC2_HOST` | IP pública de la EC2 |
+
+La llave de deploy vive solo en los secrets y en la EC2 (`authorized_keys`); el security group solo expone `22` (autenticación exclusivamente por llave) y `80` — los puertos de las instancias (`8080`/`8081`) están cerrados al exterior porque los health checks viajan por SSH.
 
 ## Infraestructura (AWS — una EC2)
 

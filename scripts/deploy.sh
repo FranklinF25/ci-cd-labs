@@ -56,12 +56,12 @@ echo "[4/8] Puerto ${TARGET_PORT} liberado"
 ssh "$APP_HOST_ALIAS" "INSTANCE_NAME=${TARGET} nohup java -jar ~/releases/${JAR} --server.port=${TARGET_PORT} > ~/logs/${TARGET}.log 2>&1 < /dev/null &"
 echo "[5/8] ${TARGET} levantando en :${TARGET_PORT} (INSTANCE_NAME=${TARGET})"
 
-# 6. Health check directo a la instancia
-"$SCRIPT_DIR/health-check.sh" "$APP_HOST" "$TARGET_PORT"
+# 6. Health check directo a la instancia (por SSH, sin exponer puertos)
+"$SCRIPT_DIR/health-check.sh" "$APP_HOST_ALIAS" "$TARGET_PORT"
 echo "[6/8] Health check OK en ${TARGET}"
 
 # 7. Validar identidad y versión de la instancia nueva
-RESP=$(curl -fs -m 5 "http://${APP_HOST}:${TARGET_PORT}/api/instance")
+RESP=$(ssh -o ConnectTimeout=5 "$APP_HOST_ALIAS" "curl -fs -m 5 http://localhost:${TARGET_PORT}/api/instance")
 echo "    /api/instance -> ${RESP}"
 echo "$RESP" | grep -q "\"instance\":\"${TARGET}\"" || {
     echo "ERROR: la instancia no reporta ser ${TARGET}"; exit 1; }
