@@ -1,14 +1,22 @@
-# Binario compilado localmente
-/ci-cd-labs
-webapi
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
 
-# Reportes de cobertura generados
+# IDEs
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# Sistema
+*.log
+
+# Tooling local del curso
+*.atl/
+Context/
+
+# Artefactos de cobertura generados
 coverage.out
 coverage.html
-
-# Tooling local
-*.atl/
-.vscode/
-
-# Material del curso / contexto local
-Context/
