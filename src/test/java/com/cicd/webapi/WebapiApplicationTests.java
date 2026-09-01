@@ -65,6 +65,14 @@ class WebapiApplicationTests {
 	}
 
 	@Test
+	void checkGoodbyeResponse() throws Exception {
+		MockMvc.perform(get("/goodbye")
+				.accept(MediaType.TEXT_PLAIN))
+			.andExpect(status().isOk())
+			.andExpect(content().string("Goodbye CI/CD World!"));
+	}
+
+	@Test
 	void checkInstanceResponse() throws Exception {
 		MockMvc.perform(get("/api/instance")
 				.accept(MediaType.APPLICATION_JSON))
