@@ -37,3 +37,11 @@ class DateController {
         return "Current Server Date: " + java.time.LocalDate.now();
     }
 }
+
+@RestController
+class GoodbyeController {
+    @GetMapping("/goodbye")
+    public String goodbye() {
+        return "Goodbye CI/CD World!";
+    }
+}
