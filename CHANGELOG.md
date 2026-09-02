@@ -3,6 +3,12 @@
 Registro de versiones del proyecto final de CI/CD.
 Formato: [SemVer](https://semver.org/) — `MAJOR.MINOR.PATCH`.
 
+## [1.2.0] - 2026-09-02
+
+### Added
+- Clase `Calculator` (lógica de negocio del módulo: add/subtract/multiply/divide/factorial con ramas de error) — alineado con el repo del curso
+- `CalculatorTest` con tests de los 5 métodos (incluye `testFactorial`, agregado nuestro: cubre caso normal y negativo)
+
 ## [1.1.0] - 2026-09-01
 
 ### Added
