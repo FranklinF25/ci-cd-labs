@@ -27,7 +27,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=== DEPLOY webapi v${VERSION} ==="
 
-# 1. La Release debe existir (el artifact no se reconstruye: se reutiliza)
+# 1. La Release debe existir (el artifact no se reconstruye: se reutiliza).
+#    Con reintentos: cuando deploy.yml dispara por tag push, la Release
+#    puede tardar ~1 minuto en publicar el JAR (release.yml corre en paralelo).
+if [ "${DEPLOY_WAIT_FOR_RELEASE:-1}" = "1" ]; then
+    for i in $(seq 1 30); do
+        curl -fsIL "$URL" > /dev/null 2>&1 && break
+        echo "    esperando a que la Release publique el artifact (${i}/30)..."
+        sleep 10
+    done
+fi
 if ! curl -fsIL "$URL" > /dev/null 2>&1; then
     echo "ERROR: no existe el artifact ${URL}"
     echo "Publicá primero la Release (git tag v${VERSION} && git push origin v${VERSION})"
