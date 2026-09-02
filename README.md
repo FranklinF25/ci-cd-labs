@@ -141,7 +141,7 @@ Resultado: Release `v1.1.0` → asset `webapi-1.1.0.jar`, publicada por `github-
 
 ## Deploy continuo (`deploy.yml`)
 
-**La cadena completa es automática**: al publicarse una Release (o manualmente vía `workflow_dispatch`), el workflow se conecta por SSH a la EC2 y ejecuta **los mismos `scripts/` que se usan localmente** — no hay lógica duplicada:
+**La cadena completa es automática**: al pushear un tag `v*` (o manualmente vía `workflow_dispatch`), el workflow se conecta por SSH a la EC2 y ejecuta **los mismos `scripts/` que se usan localmente** — no hay lógica duplicada. Nota: el disparador es el tag y no el evento de Release porque las Releases las publica un workflow con `GITHUB_TOKEN`, y GitHub suprime los eventos generados por ese token (anti-recursión); `deploy.sh` espera con reintentos a que la Release publique el JAR.
 
 ```
 git push origin v1.2.0
