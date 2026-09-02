@@ -1,15 +1,19 @@
 name: Deploy
 
-# CD completo: al publicarse una Release, se despliega automáticamente
-# a la infraestructura (EC2 con Nginx + Blue-Green) usando los mismos
-# scripts/ que se ejecutan localmente. También puede dispararse a mano.
+# CD completo: al pushear un tag v* se despliega automáticamente a la
+# infraestructura (EC2 con Nginx + Blue-Green) usando los mismos scripts/
+# que se ejecutan localmente. Nota: no se usa el evento "release published"
+# como disparador principal porque las Releases las publica un workflow con
+# GITHUB_TOKEN, y GitHub suprime los eventos generados por ese token
+# (anti-recursión). El tag es evento del usuario y sí dispara.
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       version:
-        description: 'Versión a desplegar (ej: 1.1.0)'
+        description: 'Versión a desplegar (ej: 1.2.0)'
         required: true
 
 permissions:
@@ -43,13 +47,13 @@ jobs:
       - name: Determine version
         id: version
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ -n "$RELEASE_TAG" ]; then
-            VERSION="${RELEASE_TAG#v}"
-          else
+          if [ -n "$INPUT_VERSION" ]; then
             VERSION="${INPUT_VERSION#v}"
+          else
+            VERSION="${REF_NAME#v}"
           fi
           echo "Deploying version: ${VERSION}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
